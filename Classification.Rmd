@@ -1,0 +1,557 @@
+---
+title: "Classification"
+author: "AE"
+date: "10/3/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Classification
+
+### Libraries
+```{r Libs}
+library(readr)
+library(caTools)
+library(ElemStatLearn)
+library(class)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+```
+
+### Data Import
+```{r Data}
+SN_Ads<- read_csv("work/practice/Python/Data/Social_Network_Ads.csv")
+View(SN_Ads)
+SN_Ads$Gender <-
+  as.factor(SN_Ads$Gender)
+#Since user id is a key, I wont be including it in the working data set
+data <- SN_Ads[,2:5]
+```
+
+
+### Train Test Split
+```{r TTsplit}
+set.seed(84)
+split <- 
+  sample.split(data$Purchased, 
+               SplitRatio = 0.8)
+train_set <- subset(data, split == TRUE)
+test_set <- subset(data, split == FALSE)
+
+```
+
+
+### Feature Scaling
+```{r FeatScal}
+train_set[,2:3] <- scale(train_set[,2:3])
+test_set[,2:3] <- scale(test_set[,2:3])
+```  
+
+Note that, up until this point, I have included Gender in the model without comment. I'll be creating two models in this code, one including gender and one without, to compare their classification accuracy. Then I will plot the model which contains only the independant variables: Age and Estimated Salary.
+
+### Fitting the Models
+```{r Log_Reg_Mods}
+log_reg <- glm(data$Purchased~., 
+               data = data,
+               family = "binomial")
+log_reg_2var <- glm(data$Purchased~
+                      Age + EstimatedSalary,
+                    data = data, 
+                    family = "binomial")
+
+```
+
+### Predictions
+```{r Preds_LR}
+preds_full_prob <- predict(log_reg, 
+                 type = "response",
+                 newdata = test_set[,1:3])
+pred_full <- ifelse(preds_full_prob > 0.5, 
+                    1, 0)
+preds_2_prob <- predict(log_reg_2var,
+                        type = "response",
+                        newdata =
+                          test_set[,2:3])
+pred_2 <- ifelse(preds_2_prob > 0.5, 1, 0)
+cm = table(test_set$Purchased, pred_2)
+cm
+```
+
+### Visualizing the Training Set
+NOTE: This code is not compling corresctly atm
+
+```{r Viz Train}
+set <- train_set
+X1 <- seq(min(set[,2]-1), 
+          max(set[,2] +1), by = 0.01)
+X2 <- seq(min(set[,3] - 1), 
+         max(set[,3]+1), by = 0.01)
+grid_set <- expand.grid(X1,X2)
+colnames(grid_set) <- 
+  c("Age", "EstimatedSalary")
+prob_set <- predict(log_reg_2var, 
+                    type = "response", 
+                    newdata = grid_set)
+y_grid <- ifelse(prob_set >0.5, 1, 0)
+plot(set[, -4],
+     main = 'Logistic Regression (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = ".", col = ifelse(y_grid == 1, "springgreen3", "tomato"))
+points(set, pch = 21, 
+       bg = ifelse(set[,4] == 1, 
+                   "green4", "red3"))
+```
+
+
+## KNN - K Nearest Neighbors
+
+### Train Test Split
+```{r TTsplit}
+set.seed(84)
+split <- 
+  sample.split(data$Purchased, 
+               SplitRatio = 0.8)
+train_set <- subset(data, split == TRUE)
+test_set <- subset(data, split == FALSE)
+
+```
+
+
+### Feature Scaling
+```{r FeatScal}
+train_set[,2:3] <- scale(train_set[,2:3])
+test_set[,2:3] <- scale(test_set[,2:3])
+```  
+
+### Fitting the Model(s) and Predicting the Test Set
+
+Note that this model does not take into account the gender variable.
+
+```{r KNN}
+preds <- knn(train =train_set[,2:3], 
+             test =test_set[,2:3], 
+             cl =train_set$Purchased,
+             k = 5)
+cm = table(test_set$Purchased, preds)
+cm
+```
+
+
+### Visualizing the KNN Model
+```{r VizTrain_KNN}
+library(ElemStatLearn)
+set = train_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = knn(train = set[, -3], test = grid_set, cl = set$Purchased, k = 5)
+plot(set[, -3],
+     main = 'K-NN (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+
+```{r VizTrain_KNN}
+library(ElemStatLearn)
+set = test_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = knn(train =train_set[,2:3], 
+             test =grid_set, 
+             cl =train_set$Purchased,
+             k = 5)
+plot(set[, -3],
+     main = 'K-NN (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+
+
+## Support Vector Machines
+
+### Train Test Split
+```{r TTsplit}
+set.seed(84)
+split <- 
+  sample.split(data$Purchased, 
+               SplitRatio = 0.8)
+train_set <- subset(data, split == TRUE)
+test_set <- subset(data, split == FALSE)
+
+```
+
+
+### Feature Scaling
+```{r FeatScal}
+train_set[,2:3] <- scale(train_set[,2:3])
+test_set[,2:3] <- scale(test_set[,2:3])
+``` 
+
+### Fitting the Model(s)
+```{r SVM}
+svm_full <- svm(train_set$Purchased~., 
+           data = train_set, 
+           type = "C-classification", 
+           kernel = "linear")
+
+svm_2var <- svm(Purchased~
+                  Age+EstimatedSalary, 
+                data = train_set, 
+                type = "C-classification", 
+                kernel = "linear")
+
+svm_gaus <- svm(Purchased~
+                  Age+EstimatedSalary, 
+                data = train_set, 
+                type = "C-classification", 
+                kernel = "radial")
+summary(svm_2var)
+```
+
+### Predictions
+```{r SVM_Preds}
+preds <- predict(svm_full, 
+                 newdata = test_set[,-4])
+cm <- table(test_set$Purchased, preds)
+cm
+
+preds_nogen <- predict(svm_2var, 
+                       newdata =
+                         test_set[,2:3])
+cm <- table(test_set$Purchased, preds_nogen)
+cm
+
+preds_gaus <- predict(svm_gaus, 
+                      newdata =
+                        test_set[,2:3])
+cm <- table(test_set$Purchased, preds_gaus)
+cm
+```
+
+
+### Visualizing the 2 variables Models
+#### SVM With Linear Kernel
+```{r Viz_Train_Linear}
+set = train_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(svm_2var, 
+                 newdata = grid_set)
+plot(set[, -3],
+     main = 'SVM with Linear Kernel (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+
+```{r Viz_Test_Linear}
+set <- test_set[,-1]
+X1 <- seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 <- seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set <- expand.grid(X1, X2)
+colnames(grid_set) <- c('Age', 'EstimatedSalary')
+y_grid <- predict(svm_gaus, 
+                 newdata = grid_set)
+plot(set[, -3],
+     main = 
+       'SVM with Linear Kernel (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+
+## Naive Bayes
+
+### Train Test Split
+```{r TTsplit}
+set.seed(84)
+split <- 
+  sample.split(data$Purchased, 
+               SplitRatio = 0.8)
+train_set <- subset(data, split == TRUE)
+test_set <- subset(data, split == FALSE)
+
+#Naive Bayes only generates pedictions if the target is encoded as a factor. Be certain to convert all factors.
+train_set$Purchased <-
+  as.factor(train_set$Purchased)
+test_set$Purchased <-
+  as.factor(test_set$Purchased)
+```
+
+
+### Feature Scaling
+```{r FeatScal}
+train_set[,2:3] <- scale(train_set[,2:3])
+test_set[,2:3] <- scale(test_set[,2:3])
+``` 
+
+### Fitting the Model(s)
+```{r NaiveBayes}
+nb <- naiveBayes(train_set[,-4],
+                 y = train_set$Purchased)
+nb_nogen <- naiveBayes(train_set[,2:3],
+                       y =
+                        train_set$Purchased)
+```
+
+
+### Predicting
+```{r Preds_NB}
+preds <- predict(nb, 
+                 newdata = test_set[,-4])
+
+cm <- table(test_set$Purchased, preds)
+cm
+
+preds_nogen <- predict(nb_nogen, 
+                       newdata =
+                         test_set[,-4])
+cm <- table(test_set$Purchased, preds_nogen)
+cm
+```
+
+### Visualizing the Naive Bayes (No Gender) Model
+```{r VizTRain_NB}
+set = train_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(nb_nogen, 
+                 newdata = grid_set)
+plot(set[, -3],
+     main = 'Naive Bayes with Linear Kernel (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+```{r VizTest_NB}
+set = test_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(nb_nogen, 
+                 newdata = grid_set)
+plot(set[, -3],
+     main = 'Naive Bayes with Linear Kernel (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+
+## Decision Tree
+
+### Train Test Split
+```{r TTsplit}
+set.seed(84)
+split <- 
+  sample.split(data$Purchased, 
+               SplitRatio = 0.8)
+train_set <- subset(data, split == TRUE)
+test_set <- subset(data, split == FALSE)
+# Again, we need the encoding for the predict function  to work
+train_set$Purchased <-
+  as.factor(train_set$Purchased)
+test_set$Purchased <-
+  as.factor(test_set$Purchased)
+```
+
+
+### Feature Scaling
+```{r FeatScal}
+train_set[,2:3] <- scale(train_set[,2:3])
+test_set[,2:3] <- scale(test_set[,2:3])
+``` 
+
+### Fitting the Classifier
+```{r Trees}
+#Only run for predicing decision boundries
+tree <- rpart(train_set$Purchased~., 
+             data = train_set)
+tree_nogen <- rpart(train_set$Purchased~
+                      Age+EstimatedSalary, 
+                   data = train_set)
+```
+
+### Summaries of the Tree Objects
+```{r TreeSum}
+summary(tree)
+summary(tree_nogen)
+```
+
+### Predictions
+```{r Preds_Tree}
+preds <- predict(tree, 
+                 newdata = test_set[,-4],
+                 type = "class")
+cm <- table(test_set$Purchased, preds)
+cm
+
+preds_nogen <-predict(tree_nogen,
+                      newdata =
+                        test_set[,2:3],
+                      type = "class")
+cm <- table(test_set$Purchased, preds_nogen)
+cm
+```
+
+### Visualizing the Decision Boundries
+```{r VizTrain_Tree}
+set = train_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(tree_nogen, 
+                 newdata = grid_set, 
+                 type = "class")
+plot(set[, -3],
+     main = 'Decision Tree (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+```{r VizTest_Tree}
+set = test_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(tree_nogen, 
+                 newdata = grid_set, 
+                 type = "class")
+plot(set[, -3],
+     main = 'Decision Tree (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+
+### Plotting the Tree
+```{r PlotTrees}
+#You need to reset the data and the tree fit without scaling to plot the trees.
+rpart.plot(tree)
+rpart.plot(tree_nogen)
+```
+
+
+## Random Forest Classifier
+
+### Train Test Split
+```{r TTsplit}
+set.seed(84)
+split <- 
+  sample.split(data$Purchased, 
+               SplitRatio = 0.8)
+train_set <- subset(data, split == TRUE)
+test_set <- subset(data, split == FALSE)
+
+train_set$Purchased <-
+  as.factor(train_set$Purchased)
+test_set$Purchased <-
+  as.factor(test_set$Purchased)
+```
+
+
+### Feature Scaling
+```{r FeatScal}
+train_set[,2:3] <- scale(train_set[,2:3])
+test_set[,2:3] <- scale(test_set[,2:3])
+``` 
+
+### Fitting the Model
+```{r rf_Fit}
+#default is 500 trees
+rf <- randomForest(Purchased ~., 
+                   data = train_set)
+rf_nogen <- randomForest(Purchased~Age+EstimatedSalary, data =train_set)
+
+```
+
+### Predictions
+```{r rf_Preds}
+preds <- predict(rf, newdata = test_set)
+cm <- table(test_set$Purchased, preds)
+cm
+
+preds_nogen <- predict(rf_nogen, newdata = test_set)
+cm <- table(test_set$Purchased, preds_nogen)
+cm
+
+```
+
+### Visualizing the Decision Boundries
+```{r VizTrain_Tree}
+set = train_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(rf_nogen, 
+                 newdata = grid_set, 
+                 type = "class")
+plot(set[, -3],
+     main = 'Random Forest Classification (Training set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
+
+```{r VizTest_Tree}
+set = test_set[,-1]
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01)
+X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('Age', 'EstimatedSalary')
+y_grid = predict(rf_nogen, 
+                 newdata = grid_set, 
+                 type = "class")
+plot(set[, -3],
+     main = 'Random Forest Classification (Test set)',
+     xlab = 'Age', ylab = 'Estimated Salary',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'springgreen3', 'tomato'))
+points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3'))
+```
